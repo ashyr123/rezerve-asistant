@@ -1,0 +1,810 @@
+{
+  "name": "Akıllı Rezervasyon Asistanı",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🍽️ Akıllı Rezervasyon Asistanı\n\n**Kurulum Adımları:**\n1. Telegram Bot credential ekle\n2. OpenRouter API key ekle\n3. Google Sheets OAuth2 credential ekle\n4. Placeholder lara Sheets ID yi gir\n5. Google Sheets te sutunlar olustur:\n   Tarih | Saat | Kisi | Tercih | Musteri | Durum\n\n**Max kapasite:** 5 rezervasyon/slot\n(Code node da degistir)"
+      },
+      "id": "4ea14f83-016d-43ae-bef9-5c1e222b415d",
+      "name": "Sticky Note 482c949e",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "2760b44e-60be-4b4a-86f9-e127b945b3bf",
+      "name": "Telegram Mesajı Al",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        192
+      ],
+      "webhookId": "c3ccd19b-19ad-457b-bf3f-9a24d6b64b29",
+      "credentials": {
+        "telegramApi": {
+          "id": "9rYRBmESOADjChlx",
+          "name": "leaddbot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "chat_id",
+              "value": "={{ $json.message?.chat?.id ?? $json.chat?.id }}",
+              "type": "number"
+            },
+            {
+              "id": "a2",
+              "name": "user_message",
+              "value": "={{ $json.message?.text ?? $json.text ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "user_name",
+              "value": "={{ $json.message?.from?.first_name ?? $json.from?.first_name ?? \"Müşteri\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0ea30d0d-54e6-4945-8aa0-189ea69dfd62",
+      "name": "Mesajı Normalize Et",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Mesajı Normalize Et').item.json.user_message }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Sen bir restoran rezervasyon asistanısın.\n\nBugünün tarihi: {{ $now.toFormat(\"dd.MM.yyyy\") }}\n\nKullanıcı göreli tarif verirse bunu mutlak tarihe çevir:\n- \"yarın\" → bugün + 1 gün\n- \"3 gün sonra\" → bugün + 3 gün\n- \"28'inde\" → bu ayın 28'i (geçtiyse gelecek ay)\n- \"cuma\" → en yakın cuma\n\nMüşteri tercihini şu seçeneklerden biriyle eşleştir:\n- \"cam kenarı\" → pencere, cam, dış görünüm\n- \"orta\"       → ortada, fark etmez, normal\n- \"içeri\"      → içeride, sakin, köşe\nEğer belirtmemişse: \"orta\" kullan.\nKullanıcı mesajından rezervasyon bilgilerini çıkar ve SADECE şu JSON formatında yanıt ver, başka hiçbir şey yazma:\n\n{\n  \"date\": \"DD.MM.YYYY formatında tarih\",\n  \"time\": \"HH:MM formatında saat\",\n  \"people\": kişi sayısı (integer),\n  \"preference\": \"masa tercihi (yoksa standart)\",\n  \"customer_name\": \"müşteri adı (yoksa Misafir)\",\n  \"is_valid_request\": true veya false\n}"
+        }
+      },
+      "id": "755c7fd7-94f3-4a13-bf3e-7dcf7b9df284",
+      "name": "Rezervasyon Analiz AI",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n    \"type\": \"object\",\n    \"properties\": {\n        \"date\": {\n            \"type\": \"string\"\n        },\n        \"time\": {\n            \"type\": \"string\"\n        },\n        \"people\": {\n            \"type\": \"number\"\n        },\n        \"preference\": {\n            \"type\": \"string\"\n        },\n        \"customer_name\": {\n            \"type\": \"string\"\n        },\n        \"is_valid_request\": {\n            \"type\": \"boolean\"\n        }\n    }\n}",
+        "autoFix": true
+      },
+      "id": "243a98dd-bfc8-4d47-b501-2a78d21af56c",
+      "name": "Rezervasyon Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.output.is_valid_request }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "id": "b3c2281d-fb2d-4f20-938c-789412bf2804"
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "id": "905bca1b-cdb1-405f-9a91-749a526ee7d4",
+      "name": "Geçerli Rezervasyon mu?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "16VP3VqFweg5PxwH0Ji2jD0ENWfhNEVUreNhs5DKZKuI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "732485959",
+          "mode": "id"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Tarih",
+              "lookupValue": "={{ $('Geçerli Rezervasyon mu?').item.json.output.date }}"
+            },
+            {
+              "lookupColumn": "Saat",
+              "lookupValue": "={{ $('Geçerli Rezervasyon mu?').item.json.output.time }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "23be5b00-3dbc-4835-887d-ca195d6780c0",
+      "name": "Uygunluk Kontrol Et",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1024,
+        96
+      ],
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "executeOnce": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "qvFCPqUrFTCUA3n0",
+          "name": "akilli rezrwasyon 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $('Uygunluk Kontrol Et').all();\nconst rezervasyon = $('Geçerli Rezervasyon mu?').item.json.output;\n\n// Aynı tarih + saat + tercih kombinasyonunu say\nconst ayniSlot = items.filter(i => {\n  if (!i.json || !i.json['Tarih']) return false;\n  \n  const tarihEsit = String(i.json['Tarih']).trim() === String(rezervasyon.date).trim();\n  const saatEsit  = String(i.json['Saat']).trim()  === String(rezervasyon.time).trim();\n  const tercihEsit = String(i.json['Tercih'] || i.json['preference'] || '')\n                      .toLowerCase().trim() === \n                     String(rezervasyon.preference || '').toLowerCase().trim();\n  \n  return tarihEsit && saatEsit && tercihEsit;\n});\n\n// Masa kapasiteleri\nconst KAPASITE = {\n  'cam kenarı': 2,\n  'iç mekan':   5,\n  'teras':       3,\n  'orta':       4\n};\n\nconst tercih = String(rezervasyon.preference || '').toLowerCase().trim();\nconst maxKapasite = KAPASITE[tercih] ?? 3;\nconst musait = ayniSlot.length < maxKapasite;\n\nreturn [{ json: {\n  reservation_count: ayniSlot.length,\n  max_kapasite: maxKapasite,\n  is_available: musait,\n  tercih: tercih\n}}];"
+      },
+      "id": "95c45c71-a5d8-4604-a613-885b847341de",
+      "name": "Uygunluk Hesapla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Uygunluk Hesapla').item.json.is_available }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "id": "2ac4f74e-b614-4939-a9bc-3ce0fd017ea4"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a93635d6-3890-49ed-8138-300d4c573c7a",
+      "name": "Masa Müsait mi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1888,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "Tarih",
+              "value": "={{ $('Geçerli Rezervasyon mu?').item.json.output.date }}",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "Saat",
+              "value": "={{ $('Geçerli Rezervasyon mu?').item.json.output.time }}",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "Kisi",
+              "value": "={{ $('Geçerli Rezervasyon mu?').item.json.output.people }}",
+              "type": "number"
+            },
+            {
+              "id": "c4",
+              "name": "Tercih",
+              "value": "={{ $('Geçerli Rezervasyon mu?').item.json.output.preference }}",
+              "type": "string"
+            },
+            {
+              "id": "c5",
+              "name": "Musteri",
+              "value": "={{ $('Geçerli Rezervasyon mu?').item.json.output.customer_name }}",
+              "type": "string"
+            },
+            {
+              "id": "c6",
+              "name": "Durum",
+              "value": "Onaylı",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c9580830-bb0e-42b6-b935-e02545d09140",
+      "name": "Rezervasyon Verisi Hazırla",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2112,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "16VP3VqFweg5PxwH0Ji2jD0ENWfhNEVUreNhs5DKZKuI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "732485959",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Tarih": "={{ $json.Tarih }}",
+            "Kişi Sayısı": "={{ $json.Kisi }}",
+            "Saat": "={{ $json.Saat }}",
+            "Masa Tercihi": "={{ $json.Tercih }}",
+            "Müşteri / Chat ID": "={{ $json.Musteri }}",
+            "Durum": "={{ $json.Durum }}",
+            "TelegramID": "={{ $('Mesajı Normalize Et').item.json.chat_id }}"
+          },
+          "matchingColumns": [
+            "Kişi Sayısı"
+          ],
+          "schema": [
+            {
+              "id": "Tarih",
+              "displayName": "Tarih",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Saat",
+              "displayName": "Saat",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Kişi Sayısı",
+              "displayName": "Kişi Sayısı",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Masa Tercihi",
+              "displayName": "Masa Tercihi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Müşteri / Chat ID",
+              "displayName": "Müşteri / Chat ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Durum",
+              "displayName": "Durum",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TelegramID",
+              "displayName": "TelegramID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "0c77c7f8-6185-4d71-89cb-25272175c2a5",
+      "name": "Rezervasyonu Kaydet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2336,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "qvFCPqUrFTCUA3n0",
+          "name": "akilli rezrwasyon 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Mesajı Normalize Et').item.json.chat_id }}",
+        "text": "=✅ Rezervasyonunuz onaylandı!\n\n📅 Tarih: {{ $json[\"Tarih\"] }}\n⏰ Saat: {{ $json[\"Saat\"] }}\n👥 Kişi: {{ $json[\"Kişi Sayısı\"] }}\n🍽 Tercih: {{ $json[\"Masa Tercihi\"] }}\n\nSizi bekliyoruz! 🎉",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b5d25545-2d21-43dd-a379-aa0387c7ffaa",
+      "name": "Onay Mesajı Gönder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2560,
+        0
+      ],
+      "webhookId": "14d72c51-c79d-4f24-a6df-6b9af63bd741",
+      "credentials": {
+        "telegramApi": {
+          "id": "9rYRBmESOADjChlx",
+          "name": "leaddbot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Mesajı Normalize Et').item.json.chat_id }}",
+        "text": "={{ `😔 Üzgünüz, ${$('Rezervasyon Analiz AI').item.json.output.date} tarihinde ${$('Rezervasyon Analiz AI').item.json.output.time} saatinde müsait masa kalmadı.\\n\\n🕐 Farklı bir saat belirtir misiniz?` }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "0240971a-2788-450d-b878-75e93134fb27",
+      "name": "Dolu Mesajı Gönder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2112,
+        192
+      ],
+      "webhookId": "86cec47f-70a0-46f1-ba1c-b06f52230ac8",
+      "credentials": {
+        "telegramApi": {
+          "id": "9rYRBmESOADjChlx",
+          "name": "leaddbot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Mesajı Normalize Et').item.json.chat_id }}",
+        "text": "🤔 Rezervasyon bilgilerini anlayamadım.\n\nLütfen şöyle yazar mısın?\n\"Yarın akşam saat 8 için 4 kişilik masa ayırır mısın?\"",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "cc0fb7b9-f942-4e15-b6a7-cbaa02232823",
+      "name": "Bilgi İste",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1024,
+        288
+      ],
+      "webhookId": "7d1a9e79-8e39-4290-a692-fab671e439ee",
+      "credentials": {
+        "telegramApi": {
+          "id": "9rYRBmESOADjChlx",
+          "name": "leaddbot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        208,
+        432
+      ],
+      "id": "234a509c-a2b8-412a-8672-15247d0e3180",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Qj4W4oQWVIZPL0t6",
+          "name": "akilli rezerwayon"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        544,
+        608
+      ],
+      "id": "b09c29e9-0b9b-4c4e-9c0f-1a778a13d303",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Qj4W4oQWVIZPL0t6",
+          "name": "akilli rezerwayon"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.chat_id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        368,
+        448
+      ],
+      "id": "cb32978d-cadc-4494-adf9-5f20ff7d10b1",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $('Uygunluk Kontrol Et').all();\nconst rezervasyon = $('Geçerli Rezervasyon mu?').item.json.output;\nconst telegramId = $('Telegram Mesajı Al').item.json.message.chat.id;\n\n// Aynı kişi aynı slota zaten kayıtlı mı?\nconst mukerrer = items.some(i => {\n  return (\n    String(i.json['TelegramID']) === String(telegramId) &&\n    String(i.json['Tarih']).trim() === String(rezervasyon.date).trim() &&\n    String(i.json['Saat']).trim() === String(rezervasyon.time).trim()\n  );\n});\n\nreturn [{ json: { mukerrer } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        96
+      ],
+      "id": "57bd498c-5526-4f1f-a483-9dca1bb4b03c",
+      "name": "Mükerrer Kontrol Et"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Mesajı Al').item.json.message.from.id }}",
+        "text": "Zaten rezervasyonunuz var!",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        -96
+      ],
+      "id": "a061bf0a-ae86-495d-9542-e0f79f23ddbb",
+      "name": "Send a text message",
+      "webhookId": "80802949-f713-4cb3-8460-82c71e159f21",
+      "credentials": {
+        "telegramApi": {
+          "id": "9rYRBmESOADjChlx",
+          "name": "leaddbot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8220ee81-6f8b-43c6-9d90-d86e99c7b3f3",
+              "leftValue": "={{ $json.mukerrer }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1632,
+        96
+      ],
+      "id": "33c01f05-f2fe-4184-ad3d-10104f88fa2a",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Mesajı Al": {
+      "main": [
+        [
+          {
+            "node": "Mesajı Normalize Et",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mesajı Normalize Et": {
+      "main": [
+        [
+          {
+            "node": "Rezervasyon Analiz AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rezervasyon Analiz AI": {
+      "main": [
+        [
+          {
+            "node": "Geçerli Rezervasyon mu?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rezervasyon Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Rezervasyon Analiz AI",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geçerli Rezervasyon mu?": {
+      "main": [
+        [
+          {
+            "node": "Uygunluk Kontrol Et",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bilgi İste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uygunluk Kontrol Et": {
+      "main": [
+        [
+          {
+            "node": "Uygunluk Hesapla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uygunluk Hesapla": {
+      "main": [
+        [
+          {
+            "node": "Mükerrer Kontrol Et",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Masa Müsait mi?": {
+      "main": [
+        [
+          {
+            "node": "Rezervasyon Verisi Hazırla",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dolu Mesajı Gönder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rezervasyon Verisi Hazırla": {
+      "main": [
+        [
+          {
+            "node": "Rezervasyonu Kaydet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rezervasyonu Kaydet": {
+      "main": [
+        [
+          {
+            "node": "Onay Mesajı Gönder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Rezervasyon Analiz AI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Rezervasyon Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Rezervasyon Analiz AI",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mükerrer Kontrol Et": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Masa Müsait mi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "f46c33dd-5e3c-43f9-92c0-68356ef009ec",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c8d9058cfc10e44bb9b1bc31a19bb4e1c9dbc52a39f4160fb5a65f6b11d96237"
+  },
+  "id": "tLB1vbVeEFSkaQe7",
+  "tags": []
+}
